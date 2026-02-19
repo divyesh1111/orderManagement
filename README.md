@@ -227,39 +227,4 @@ docker compose up --build
 
 ---
 
-## Rubric Mapping
-
-- Architecture correctness: microservices with clear ownership and no shared database
-- Database-per-service: separate Postgres DB per service + separate DbContext
-- EF Core async usage: async EF Core methods across services
-- Docker & Compose: Dockerfile per service + docker-compose orchestration
-- Synchronous validation: OrderService validates customer and product via HttpClient
-- Event-based communication: OrderCreated published by OrderService; ProductService updates stock; NotificationService logs event
-- Documentation: README + IEEE report + architecture diagram
-- Code organization: consistent folder layout, DTOs, endpoints, messaging, shared contracts
-
----
-
-# .editorconfig
-
-```ini
-root = true
-
-[*]
-charset = utf-8
-end_of_line = lf
-insert_final_newline = true
-indent_style = space
-indent_size = 4
-trim_trailing_whitespace = true
-
-[*.cs]
-dotnet_sort_system_directives_first = true
-csharp_new_line_before_open_brace = all
-csharp_indent_case_contents = true
-csharp_indent_switch_labels = true
-
-[*.{yml,yaml,json,md}]
-indent_size = 2
-```
 
