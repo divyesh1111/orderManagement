@@ -1,0 +1,123 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  product-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: productdb
+    volumes:
+      - product-db-data:/var/lib/postgresql/data
+
+  customer-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: customerdb
+    volumes:
+      - customer-db-data:/var/lib/postgresql/data
+
+  order-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: orderdb
+    volumes:
+      - order-db-data:/var/lib/postgresql/data
+
+  notification-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: notificationdb
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+
+  product-service:
+    build:
+      context: .
+      dockerfile: src/ProductService/ProductService.Api/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: Host=product-db;Port=5432;Database=productdb;Username=postgres;Password=${POSTGRES_PASSWORD}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__User: guest
+      RabbitMq__Pass: guest
+      RabbitMq__Exchange: orders.exchange
+      RabbitMq__OrderCreatedRoutingKey: order.created
+      RabbitMq__QueueName: product.ordercreated
+    depends_on:
+      - rabbitmq
+      - product-db
+    ports:
+      - "5001:8080"
+
+  customer-service:
+    build:
+      context: .
+      dockerfile: src/CustomerService/CustomerService.Api/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: Host=customer-db;Port=5432;Database=customerdb;Username=postgres;Password=${POSTGRES_PASSWORD}
+    depends_on:
+      - customer-db
+    ports:
+      - "5002:8080"
+
+  order-service:
+    build:
+      context: .
+      dockerfile: src/OrderService/OrderService.Api/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: Host=order-db;Port=5432;Database=orderdb;Username=postgres;Password=${POSTGRES_PASSWORD}
+      ServiceUrls__Customer: http://customer-service:8080
+      ServiceUrls__Product: http://product-service:8080
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__User: guest
+      RabbitMq__Pass: guest
+      RabbitMq__Exchange: orders.exchange
+      RabbitMq__OrderCreatedRoutingKey: order.created
+    depends_on:
+      - rabbitmq
+      - order-db
+      - product-service
+      - customer-service
+    ports:
+      - "5003:8080"
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: src/NotificationService/NotificationService.Api/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: Host=notification-db;Port=5432;Database=notificationdb;Username=postgres;Password=${POSTGRES_PASSWORD}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__User: guest
+      RabbitMq__Pass: guest
+      RabbitMq__Exchange: orders.exchange
+      RabbitMq__OrderCreatedRoutingKey: order.created
+      RabbitMq__QueueName: notification.ordercreated
+    depends_on:
+      - rabbitmq
+      - notification-db
+    ports:
+      - "5004:8080"
+
+volumes:
+  product-db-data:
+  customer-db-data:
+  order-db-data:
+  notification-db-data:
