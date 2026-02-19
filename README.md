@@ -125,9 +125,9 @@ POST /customers
 
 ```json
 {
-  "firstName": "Ali",
-  "lastName": "Khan",
-  "email": "ali@example.com"
+  "firstName": "Divyesh",
+  "lastName": "Hirapara",
+  "email": "divyeshhirapara@test.com"
 }
 ```
 
