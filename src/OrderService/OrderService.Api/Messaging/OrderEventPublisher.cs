@@ -10,7 +10,11 @@ public sealed class OrderEventPublisher(IOptions<RabbitMqOptions> optionsAccesso
 {
     readonly RabbitMqOptions options = optionsAccessor.Value;
 
-    public void PublishOrderCreated(OrderCreatedEvent evt)
+    public void PublishOrderCreated(OrderCreatedEvent evt) => Publish(evt, options.OrderCreatedRoutingKey);
+
+    public void PublishOrderCancelled(OrderCancelledEvent evt) => Publish(evt, options.OrderCancelledRoutingKey);
+
+    void Publish<T>(T evt, string routingKey)
     {
         var factory = new ConnectionFactory
         {
@@ -33,7 +37,7 @@ public sealed class OrderEventPublisher(IOptions<RabbitMqOptions> optionsAccesso
 
         channel.BasicPublish(
             exchange: options.Exchange,
-            routingKey: options.OrderCreatedRoutingKey,
+            routingKey: routingKey,
             basicProperties: props,
             body: body
         );

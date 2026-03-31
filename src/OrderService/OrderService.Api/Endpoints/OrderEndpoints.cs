@@ -118,6 +118,32 @@ public static class OrderEndpoints
             return Results.Created($"/orders/{order.Id}", mapped);
         });
 
+        group.MapPost("/{id:guid}/cancel", async (
+            Guid id,
+            OrderDbContext db,
+            OrderEventPublisher publisher,
+            CancellationToken ct) =>
+        {
+            var order = await db.Orders.Include(x => x.Items).SingleOrDefaultAsync(x => x.Id == id, ct);
+            if (order is null) return Results.NotFound();
+            if (string.Equals(order.Status, "Cancelled", StringComparison.OrdinalIgnoreCase)) return Results.Conflict(new { error = "OrderAlreadyCancelled" });
+
+            order.Status = "Cancelled";
+            await db.SaveChangesAsync(ct);
+
+            var evt = new OrderCancelledEvent(
+                EventId: Guid.NewGuid(),
+                OrderId: order.Id,
+                CustomerId: order.CustomerId,
+                CancelledAtUtc: DateTime.UtcNow,
+                Items: order.Items.Select(i => new OrderCreatedItemDto(i.ProductId, i.Quantity)).ToList()
+            );
+
+            publisher.PublishOrderCancelled(evt);
+
+            return Results.NoContent();
+        });
+
         return app;
     }
 }

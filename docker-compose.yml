@@ -54,12 +54,11 @@ services:
       RabbitMq__Pass: guest
       RabbitMq__Exchange: orders.exchange
       RabbitMq__OrderCreatedRoutingKey: order.created
+      RabbitMq__OrderCancelledRoutingKey: order.cancelled
       RabbitMq__QueueName: product.ordercreated
     depends_on:
       - rabbitmq
       - product-db
-    ports:
-      - "5001:8080"
 
   customer-service:
     build:
@@ -70,8 +69,6 @@ services:
       ConnectionStrings__Default: Host=customer-db;Port=5432;Database=customerdb;Username=postgres;Password=${POSTGRES_PASSWORD}
     depends_on:
       - customer-db
-    ports:
-      - "5002:8080"
 
   order-service:
     build:
@@ -88,13 +85,12 @@ services:
       RabbitMq__Pass: guest
       RabbitMq__Exchange: orders.exchange
       RabbitMq__OrderCreatedRoutingKey: order.created
+      RabbitMq__OrderCancelledRoutingKey: order.cancelled
     depends_on:
       - rabbitmq
       - order-db
       - product-service
       - customer-service
-    ports:
-      - "5003:8080"
 
   notification-service:
     build:
@@ -109,12 +105,29 @@ services:
       RabbitMq__Pass: guest
       RabbitMq__Exchange: orders.exchange
       RabbitMq__OrderCreatedRoutingKey: order.created
+      RabbitMq__OrderCancelledRoutingKey: order.cancelled
       RabbitMq__QueueName: notification.ordercreated
     depends_on:
       - rabbitmq
       - notification-db
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: src/ApiGateway/ApiGateway.Api/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ServiceUrls__Product: http://product-service:8080
+      ServiceUrls__Customer: http://customer-service:8080
+      ServiceUrls__Order: http://order-service:8080
+      ServiceUrls__Notification: http://notification-service:8080
+    depends_on:
+      - product-service
+      - customer-service
+      - order-service
+      - notification-service
     ports:
-      - "5004:8080"
+      - "5000:8080"
 
 volumes:
   product-db-data:

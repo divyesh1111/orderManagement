@@ -33,7 +33,9 @@ public sealed class RabbitMqSubscriber(
 
         channel.ExchangeDeclare(options.Exchange, ExchangeType.Direct, durable: true, autoDelete: false, arguments: null);
         channel.QueueDeclare(options.QueueName, durable: true, exclusive: false, autoDelete: false, arguments: null);
+
         channel.QueueBind(options.QueueName, options.Exchange, options.OrderCreatedRoutingKey);
+        channel.QueueBind(options.QueueName, options.Exchange, options.OrderCancelledRoutingKey);
 
         var consumer = new AsyncEventingBasicConsumer(channel);
         consumer.Received += OnMessage;
@@ -49,9 +51,31 @@ public sealed class RabbitMqSubscriber(
 
         try
         {
+            var routingKey = ea.RoutingKey ?? "";
             var json = Encoding.UTF8.GetString(ea.Body.ToArray());
-            var evt = JsonSerializer.Deserialize<OrderCreatedEvent>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            if (evt is null)
+
+            Guid orderId;
+            if (routingKey == options.OrderCreatedRoutingKey)
+            {
+                var evt = JsonSerializer.Deserialize<OrderCreatedEvent>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                if (evt is null)
+                {
+                    channel.BasicAck(ea.DeliveryTag, false);
+                    return;
+                }
+                orderId = evt.OrderId;
+            }
+            else if (routingKey == options.OrderCancelledRoutingKey)
+            {
+                var evt = JsonSerializer.Deserialize<OrderCancelledEvent>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                if (evt is null)
+                {
+                    channel.BasicAck(ea.DeliveryTag, false);
+                    return;
+                }
+                orderId = evt.OrderId;
+            }
+            else
             {
                 channel.BasicAck(ea.DeliveryTag, false);
                 return;
@@ -63,13 +87,12 @@ public sealed class RabbitMqSubscriber(
             await db.Notifications.AddAsync(new NotificationLog
             {
                 Id = Guid.NewGuid(),
-                OrderId = evt.OrderId,
-                Message = $"OrderCreated:{evt.OrderId}",
+                OrderId = orderId,
+                Message = $"{routingKey}:{orderId}",
                 CreatedAtUtc = DateTime.UtcNow
             });
 
             await db.SaveChangesAsync();
-
             channel.BasicAck(ea.DeliveryTag, false);
         }
         catch

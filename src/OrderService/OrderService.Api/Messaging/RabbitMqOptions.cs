@@ -8,4 +8,5 @@ public sealed class RabbitMqOptions
     public string Pass { get; set; } = "guest";
     public string Exchange { get; set; } = "orders.exchange";
     public string OrderCreatedRoutingKey { get; set; } = "order.created";
+    public string OrderCancelledRoutingKey { get; set; } = "order.cancelled";
 }
