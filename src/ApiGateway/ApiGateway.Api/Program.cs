@@ -33,10 +33,7 @@ builder.Services.AddHttpClient<ProductClient>((sp, client) =>
 var app = builder.Build();
 
 app.UseSwagger();
-app.UseSwaggerUI(c =>
-{
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "ApiGateway");
-});
+app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "ApiGateway"));
 
 app.MapGet("/api/orders/{id:guid}/details", async (
     Guid id,
