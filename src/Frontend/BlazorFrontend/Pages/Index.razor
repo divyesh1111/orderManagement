@@ -1,11 +1,134 @@
 ﻿@page "/"
+@inject ProductsApi ProductsApi
+@inject CustomersApi CustomersApi
+@inject OrdersApi OrdersApi
+@inject NotificationsApi NotificationsApi
 
-<h3>Dashboard</h3>
+<div class="row g-3 align-items-stretch">
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-body">
+        <h3 class="card-title mb-2">Dashboard</h3>
+        <p class="text-muted mb-4">
+          This frontend communicates only with the API Gateway.
+        </p>
 
-<p>This frontend communicates only with the API Gateway.</p>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Products</div>
+                <div class="display-6">@productCount</div>
+                <a class="btn btn-sm btn-outline-primary mt-2" href="/products">Open</a>
+              </div>
+            </div>
+          </div>
 
-<ul>
-  <li><a href="/products">Products</a></li>
-  <li><a href="/customers">Customers</a></li>
-  <li><a href="/orders">Orders</a></li>
-</ul>
+          <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Customers</div>
+                <div class="display-6">@customerCount</div>
+                <a class="btn btn-sm btn-outline-primary mt-2" href="/customers">Open</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Orders</div>
+                <div class="display-6">@orderCount</div>
+                <a class="btn btn-sm btn-outline-primary mt-2" href="/orders">Open</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+          <div class="alert alert-danger mt-4 mb-0">@error</div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Recent Notifications</span>
+        <a class="btn btn-sm btn-outline-secondary" href="/notifications">View all</a>
+      </div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between mb-3">
+          <div class="text-muted">Total</div>
+          <div class="fw-semibold">@notificationCount</div>
+        </div>
+
+        @if (recentNotifications.Count == 0)
+        {
+          <div class="text-muted">No notifications yet</div>
+        }
+        else
+        {
+          <div class="list-group">
+            @foreach (var n in recentNotifications)
+            {
+              <div class="list-group-item">
+                <div class="d-flex justify-content-between">
+                  <div class="fw-semibold">@n.Message</div>
+                  <div class="text-muted" style="font-size:12px">@n.CreatedAtUtc</div>
+                </div>
+                <div class="text-muted" style="font-size:12px">Order: @n.OrderId</div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>
+
+@code {
+  int productCount;
+  int customerCount;
+  int orderCount;
+  int notificationCount;
+  List<NotificationReadDto> recentNotifications = [];
+  string error = "";
+
+  protected override async Task OnInitializedAsync()
+  {
+    error = "";
+    try
+    {
+      var ct = CancellationToken.None;
+
+      var productsTask = ProductsApi.GetAllAsync(ct);
+      var customersTask = CustomersApi.GetAllAsync(ct);
+      var ordersTask = OrdersApi.GetAllAsync(ct);
+      var notificationsTask = NotificationsApi.GetAllAsync(ct);
+
+      await Task.WhenAll(productsTask, customersTask, ordersTask, notificationsTask);
+
+      var products = productsTask.Result;
+      var customers = customersTask.Result;
+      var orders = ordersTask.Result;
+      var notifications = notificationsTask.Result;
+
+      productCount = products.Count;
+      customerCount = customers.Count;
+      orderCount = orders.Count;
+      notificationCount = notifications.Count;
+
+      recentNotifications = notifications
+        .OrderByDescending(x => x.CreatedAtUtc)
+        .Take(5)
+        .ToList();
+    }
+    catch (Exception ex)
+    {
+      error = ex.Message;
+    }
+  }
+}

@@ -45,17 +45,24 @@
         {
           <div class="alert alert-danger mt-3">@error</div>
         }
+
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+          <div class="alert alert-success mt-3">@message</div>
+        }
       </div>
     </div>
   </div>
 
   <div class="col-lg-7">
     <div class="card">
-      <div class="card-header">All Orders</div>
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>All Orders</span>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="LoadAllAsync" disabled="@busy">Refresh</button>
+      </div>
       <div class="card-body">
-        <button class="btn btn-outline-secondary btn-sm mb-3" @onclick="LoadAllAsync" disabled="@busy">Refresh</button>
         <div class="table-responsive">
-          <table class="table table-sm table-striped">
+          <table class="table table-sm table-striped align-middle">
             <thead>
               <tr>
                 <th>Order Id</th>
@@ -63,6 +70,7 @@
                 <th>Created</th>
                 <th>Customer Id</th>
                 <th>Items</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -74,10 +82,25 @@
                   <td>@o.CreatedAtUtc</td>
                   <td class="text-muted" style="font-size:12px">@o.CustomerId</td>
                   <td>@o.Items.Count</td>
+                  <td class="text-end">
+                    @if (!IsCancelled(o))
+                    {
+                      <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelAsync(o.Id)" disabled="@busy">Cancel</button>
+                    }
+                    else
+                    {
+                      <span class="text-muted" style="font-size:12px">Cancelled</span>
+                    }
+                  </td>
                 </tr>
               }
             </tbody>
           </table>
+
+          @if (orders.Count == 0)
+          {
+            <div class="text-muted">No orders</div>
+          }
         </div>
       </div>
     </div>
@@ -98,13 +121,17 @@
   List<OrderReadDto> orders = [];
   bool busy;
   string error = "";
+  string message = "";
 
   protected override async Task OnInitializedAsync() => await LoadAllAsync();
+
+  static bool IsCancelled(OrderReadDto o) => string.Equals(o.Status, "Cancelled", StringComparison.OrdinalIgnoreCase);
 
   async Task LoadAllAsync()
   {
     busy = true;
     error = "";
+    message = "";
     try
     {
       var ct = CancellationToken.None;
@@ -132,6 +159,7 @@
   {
     busy = true;
     error = "";
+    message = "";
     try
     {
       if (!Guid.TryParse(form.CustomerId, out var customerId))
@@ -154,9 +182,41 @@
 
       var dto = new OrderCreateDto(customerId, new List<OrderItemCreateDto> { new(productId, form.Quantity) });
       var created = await OrdersApi.CreateAsync(dto, CancellationToken.None);
-      if (created is null) error = "Create failed";
+      if (created is null)
+      {
+        error = "Create failed";
+        return;
+      }
 
       form = new OrderForm();
+      message = "Order created";
+      await LoadAllAsync();
+    }
+    catch (Exception ex)
+    {
+      error = ex.Message;
+    }
+    finally
+    {
+      busy = false;
+    }
+  }
+
+  async Task CancelAsync(Guid orderId)
+  {
+    busy = true;
+    error = "";
+    message = "";
+    try
+    {
+      var ok = await OrdersApi.CancelAsync(orderId, CancellationToken.None);
+      if (!ok)
+      {
+        error = "Cancel failed";
+        return;
+      }
+
+      message = "Order cancelled";
       await LoadAllAsync();
     }
     catch (Exception ex)

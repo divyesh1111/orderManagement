@@ -17,4 +17,10 @@ public sealed class OrdersApi(HttpClient http)
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<OrderReadDto>(cancellationToken: ct);
     }
+
+    public async Task<bool> CancelAsync(Guid orderId, CancellationToken ct)
+    {
+        var res = await http.PostAsync($"/api/orders/{orderId}/cancel", content: null, cancellationToken: ct);
+        return res.IsSuccessStatusCode;
+    }
 }
