@@ -1,0 +1,171 @@
+﻿@page "/orders"
+@inject OrdersApi OrdersApi
+@inject CustomersApi CustomersApi
+@inject ProductsApi ProductsApi
+
+<h3>Orders</h3>
+
+<div class="row">
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-header">Create Order</div>
+      <div class="card-body">
+        <EditForm Model="form" OnValidSubmit="CreateAsync">
+          <div class="mb-2">
+            <label class="form-label">Customer</label>
+            <select class="form-select" @bind="form.CustomerId">
+              <option value="">Select customer</option>
+              @foreach (var c in customers)
+              {
+                <option value="@c.Id">@c.FirstName @c.LastName (@c.Email)</option>
+              }
+            </select>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">Product</label>
+            <select class="form-select" @bind="form.ProductId">
+              <option value="">Select product</option>
+              @foreach (var p in products)
+              {
+                <option value="@p.Id">@p.Name (Stock @p.Stock, Price @p.Price)</option>
+              }
+            </select>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">Quantity</label>
+            <InputNumber class="form-control" @bind-Value="form.Quantity" />
+          </div>
+
+          <button class="btn btn-primary" type="submit" disabled="@busy">Create</button>
+        </EditForm>
+
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+          <div class="alert alert-danger mt-3">@error</div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">All Orders</div>
+      <div class="card-body">
+        <button class="btn btn-outline-secondary btn-sm mb-3" @onclick="LoadAllAsync" disabled="@busy">Refresh</button>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped">
+            <thead>
+              <tr>
+                <th>Order Id</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Customer Id</th>
+                <th>Items</th>
+              </tr>
+            </thead>
+            <tbody>
+              @foreach (var o in orders)
+              {
+                <tr>
+                  <td class="text-muted" style="font-size:12px">@o.Id</td>
+                  <td>@o.Status</td>
+                  <td>@o.CreatedAtUtc</td>
+                  <td class="text-muted" style="font-size:12px">@o.CustomerId</td>
+                  <td>@o.Items.Count</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+@code {
+  sealed class OrderForm
+  {
+    public string CustomerId { get; set; } = "";
+    public string ProductId { get; set; } = "";
+    public int Quantity { get; set; } = 1;
+  }
+
+  OrderForm form = new();
+  List<CustomerReadDto> customers = [];
+  List<ProductReadDto> products = [];
+  List<OrderReadDto> orders = [];
+  bool busy;
+  string error = "";
+
+  protected override async Task OnInitializedAsync() => await LoadAllAsync();
+
+  async Task LoadAllAsync()
+  {
+    busy = true;
+    error = "";
+    try
+    {
+      var ct = CancellationToken.None;
+      var cTask = CustomersApi.GetAllAsync(ct);
+      var pTask = ProductsApi.GetAllAsync(ct);
+      var oTask = OrdersApi.GetAllAsync(ct);
+
+      await Task.WhenAll(cTask, pTask, oTask);
+
+      customers = cTask.Result;
+      products = pTask.Result;
+      orders = oTask.Result;
+    }
+    catch (Exception ex)
+    {
+      error = ex.Message;
+    }
+    finally
+    {
+      busy = false;
+    }
+  }
+
+  async Task CreateAsync()
+  {
+    busy = true;
+    error = "";
+    try
+    {
+      if (!Guid.TryParse(form.CustomerId, out var customerId))
+      {
+        error = "Select a valid customer";
+        return;
+      }
+
+      if (!Guid.TryParse(form.ProductId, out var productId))
+      {
+        error = "Select a valid product";
+        return;
+      }
+
+      if (form.Quantity <= 0)
+      {
+        error = "Quantity must be greater than 0";
+        return;
+      }
+
+      var dto = new OrderCreateDto(customerId, new List<OrderItemCreateDto> { new(productId, form.Quantity) });
+      var created = await OrdersApi.CreateAsync(dto, CancellationToken.None);
+      if (created is null) error = "Create failed";
+
+      form = new OrderForm();
+      await LoadAllAsync();
+    }
+    catch (Exception ex)
+    {
+      error = ex.Message;
+    }
+    finally
+    {
+      busy = false;
+    }
+  }
+}

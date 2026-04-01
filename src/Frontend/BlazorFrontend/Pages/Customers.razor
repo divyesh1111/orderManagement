@@ -1,0 +1,118 @@
+﻿@page "/customers"
+@inject CustomersApi Api
+
+<h3>Customers</h3>
+
+<div class="row">
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-header">Add Customer</div>
+      <div class="card-body">
+        <EditForm Model="form" OnValidSubmit="CreateAsync">
+          <div class="mb-2">
+            <label class="form-label">First Name</label>
+            <InputText class="form-control" @bind-Value="form.FirstName" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Last Name</label>
+            <InputText class="form-control" @bind-Value="form.LastName" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Email</label>
+            <InputText class="form-control" @bind-Value="form.Email" />
+          </div>
+          <button class="btn btn-primary" type="submit" disabled="@busy">Add</button>
+        </EditForm>
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+          <div class="alert alert-danger mt-3">@error</div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">All Customers</div>
+      <div class="card-body">
+        <button class="btn btn-outline-secondary btn-sm mb-3" @onclick="LoadAsync" disabled="@busy">Refresh</button>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Id</th>
+              </tr>
+            </thead>
+            <tbody>
+              @foreach (var c in items)
+              {
+                <tr>
+                  <td>@c.FirstName @c.LastName</td>
+                  <td>@c.Email</td>
+                  <td class="text-muted" style="font-size:12px">@c.Id</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+@code {
+  sealed class CustomerForm
+  {
+    public string FirstName { get; set; } = "";
+    public string LastName { get; set; } = "";
+    public string Email { get; set; } = "";
+  }
+
+  List<CustomerReadDto> items = [];
+  CustomerForm form = new();
+  bool busy;
+  string error = "";
+
+  protected override async Task OnInitializedAsync() => await LoadAsync();
+
+  async Task LoadAsync()
+  {
+    busy = true;
+    error = "";
+    try
+    {
+      items = await Api.GetAllAsync(CancellationToken.None);
+    }
+    catch (Exception ex)
+    {
+      error = ex.Message;
+    }
+    finally
+    {
+      busy = false;
+    }
+  }
+
+  async Task CreateAsync()
+  {
+    busy = true;
+    error = "";
+    try
+    {
+      var created = await Api.CreateAsync(new CustomerCreateDto(form.FirstName, form.LastName, form.Email), CancellationToken.None);
+      if (created is null) error = "Create failed";
+      form = new CustomerForm();
+      await LoadAsync();
+    }
+    catch (Exception ex)
+    {
+      error = ex.Message;
+    }
+    finally
+    {
+      busy = false;
+    }
+  }
+}

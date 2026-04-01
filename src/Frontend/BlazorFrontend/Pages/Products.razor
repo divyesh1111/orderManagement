@@ -1,0 +1,120 @@
+﻿@page "/products"
+@inject ProductsApi Api
+
+<h3>Products</h3>
+
+<div class="row">
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-header">Add Product</div>
+      <div class="card-body">
+        <EditForm Model="form" OnValidSubmit="CreateAsync">
+          <div class="mb-2">
+            <label class="form-label">Name</label>
+            <InputText class="form-control" @bind-Value="form.Name" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Price</label>
+            <InputNumber class="form-control" @bind-Value="form.Price" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Stock</label>
+            <InputNumber class="form-control" @bind-Value="form.Stock" />
+          </div>
+          <button class="btn btn-primary" type="submit" disabled="@busy">Add</button>
+        </EditForm>
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+          <div class="alert alert-danger mt-3">@error</div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">All Products</div>
+      <div class="card-body">
+        <button class="btn btn-outline-secondary btn-sm mb-3" @onclick="LoadAsync" disabled="@busy">Refresh</button>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Id</th>
+              </tr>
+            </thead>
+            <tbody>
+              @foreach (var p in items)
+              {
+                <tr>
+                  <td>@p.Name</td>
+                  <td>@p.Price</td>
+                  <td>@p.Stock</td>
+                  <td class="text-muted" style="font-size:12px">@p.Id</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+@code {
+  sealed class ProductForm
+  {
+    public string Name { get; set; } = "";
+    public decimal Price { get; set; }
+    public int Stock { get; set; }
+  }
+
+  List<ProductReadDto> items = [];
+  ProductForm form = new();
+  bool busy;
+  string error = "";
+
+  protected override async Task OnInitializedAsync() => await LoadAsync();
+
+  async Task LoadAsync()
+  {
+    busy = true;
+    error = "";
+    try
+    {
+      items = await Api.GetAllAsync(CancellationToken.None);
+    }
+    catch (Exception ex)
+    {
+      error = ex.Message;
+    }
+    finally
+    {
+      busy = false;
+    }
+  }
+
+  async Task CreateAsync()
+  {
+    busy = true;
+    error = "";
+    try
+    {
+      var created = await Api.CreateAsync(new ProductCreateDto(form.Name, form.Price, form.Stock), CancellationToken.None);
+      if (created is null) error = "Create failed";
+      form = new ProductForm();
+      await LoadAsync();
+    }
+    catch (Exception ex)
+    {
+      error = ex.Message;
+    }
+    finally
+    {
+      busy = false;
+    }
+  }
+}

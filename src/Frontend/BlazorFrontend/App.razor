@@ -1,0 +1,10 @@
+﻿<Router AppAssembly="@typeof(App).Assembly">
+  <Found Context="routeData">
+    <RouteView RouteData="@routeData" DefaultLayout="@typeof(BlazorFrontend.Shared.MainLayout)" />
+  </Found>
+  <NotFound>
+    <LayoutView Layout="@typeof(BlazorFrontend.Shared.MainLayout)">
+      <h3>Not Found</h3>
+    </LayoutView>
+  </NotFound>
+</Router>

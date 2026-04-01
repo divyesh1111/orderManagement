@@ -1,4 +1,4 @@
-services:
+﻿services:
   rabbitmq:
     image: rabbitmq:3-management
     ports:
@@ -129,6 +129,17 @@ services:
     ports:
       - "5000:8080"
 
+  blazor-frontend:
+    build:
+      context: .
+      dockerfile: src/Frontend/BlazorFrontend/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ApiBaseUrl: http://api-gateway:8080
+    depends_on:
+      - api-gateway
+    ports:
+      - "8080:8080"
 volumes:
   product-db-data:
   customer-db-data:
