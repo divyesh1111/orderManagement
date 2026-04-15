@@ -1,54 +1,78 @@
-# Containerized E-Commerce Microservices Backend
+# Full-Stack Containerized E-Commerce Microservices System (Blazor + API Gateway)
 
-A containerized distributed backend for a simplified e-commerce platform implemented using:
+This repository contains a containerized microservices-based e-commerce backend extended with a Blazor frontend. The solution demonstrates end-to-end integration through an API Gateway, database-per-service, asynchronous messaging with RabbitMQ, and DTO-based API design.
+
+## Tech Stack
 
 - ASP.NET Core (.NET 8)
 - Entity Framework Core (async)
 - PostgreSQL (database-per-service)
-- RabbitMQ (event-based communication)
-- Docker + Docker Compose
-
----
+- RabbitMQ (event-driven messaging)
+- YARP (API Gateway)
+- Blazor Server (frontend)
+- Docker and Docker Compose
 
 ## Services
 
-| Service | Responsibility | Port (Host → Container) |
-|----------|----------------|--------------------------|
-| ProductService | Product catalog, price, stock. Subscribes to OrderCreated to decrement stock. | 5001 → 8080 |
-| CustomerService | Customer information. | 5002 → 8080 |
-| OrderService | Creates and tracks orders. Validates customer and product existence via HTTP. Publishes OrderCreated event. | 5003 → 8080 |
-| NotificationService | Subscribes to OrderCreated events and stores logs. | 5004 → 8080 |
-| RabbitMQ | Message broker + management UI. | 5672, 15672 |
-| Postgres DBs | One database per service. | Internal |
-
----
+| Service | Purpose | Host Port |
+|--------|---------|----------:|
+| blazor-frontend | Blazor UI. Communicates only with API Gateway via HttpClient. | 8080 |
+| api-gateway | Single entry point. Routes `/api/*` to internal services. Provides aggregated endpoint `/api/orders/{id}/details`. | 5000 |
+| product-service | Product catalog and stock. Consumes order events to update stock. | Not exposed (main mode) |
+| customer-service | Customer management. | Not exposed (main mode) |
+| order-service | Order creation and tracking. Validates customer/product via HTTP. Publishes events. | Not exposed (main mode) |
+| notification-service | Consumes order events and stores notification logs. | Not exposed (main mode) |
+| rabbitmq | Message broker + management UI. | 5672, 15672 |
+| product-db | PostgreSQL database for Product Service | Internal |
+| customer-db | PostgreSQL database for Customer Service | Internal |
+| order-db | PostgreSQL database for Order Service | Internal |
+| notification-db | PostgreSQL database for Notification Service | Internal |
 
 ## Architecture Summary
 
-- Database-per-service: each microservice has its own DbContext and its own PostgreSQL database.
-- Synchronous communication (HTTP): OrderService validates customer and product existence using HttpClient.
-- Asynchronous communication (RabbitMQ): OrderService publishes OrderCreated; ProductService updates stock; NotificationService stores logs.
-- Eventual consistency: stock is updated asynchronously after the order is committed.
+- Database-per-service: each microservice owns its database and DbContext.
+- API Gateway: the gateway is the only backend component exposed to clients in main mode.
+- Synchronous validation: Order Service validates customer and product existence via HTTP.
+- Asynchronous messaging: events are published to RabbitMQ and consumed by Product and Notification services.
+- Eventual consistency: stock updates occur asynchronously after order creation/cancellation.
 
----
+## Repository Structure (High Level)
+
+```text
+.
+├─ docker-compose.yml
+├─ docker-compose.swagger.yml                  (optional for viva/testing)
+├─ .env
+└─ src
+   ├─ ApiGateway/ApiGateway.Api
+   ├─ CustomerService/CustomerService.Api
+   ├─ ProductService/ProductService.Api
+   ├─ OrderService/OrderService.Api
+   ├─ NotificationService/NotificationService.Api
+   ├─ Shared/Contracts
+   └─ Frontend/BlazorFrontend
 
 ## Prerequisites
-
-Required:
 
 - Docker Desktop (Linux containers mode)
 - Docker Compose (included with Docker Desktop)
 
-Optional (only if you create/update migrations locally):
+## Environment Configuration
 
-- .NET SDK 8
-- dotnet-ef tool
+The repository uses an `.env` file for PostgreSQL password:
 
----
+```env
+POSTGRES_PASSWORD=postgrespw
+```
 
-## Run the System
+RabbitMQ uses default credentials:
 
-From repository root:
+- Username: guest  
+- Password: guest  
+
+## Run (Main Mode: Gateway + Frontend)
+
+From the repository root:
 
 ```bash
 docker compose up --build
@@ -66,165 +90,157 @@ Stop:
 docker compose down
 ```
 
----
-
-## Swagger URLs
-
-- Product Service: http://localhost:5001/swagger
-- Customer Service: http://localhost:5002/swagger
-- Order Service: http://localhost:5003/swagger
-- Notification Service: http://localhost:5004/swagger
-
----
-
-## RabbitMQ Management UI
-
-- URL: http://localhost:15672
-- Username: guest
-- Password: guest
-
----
-
-## API Overview
-
-### Product Service
-
-- GET /products  
-- GET /products/{id}  
-- GET /products/{id}/exists  
-- POST /products  
-- PUT /products/{id}  
-- DELETE /products/{id}  
-
-### Customer Service
-
-- GET /customers  
-- GET /customers/{id}  
-- GET /customers/{id}/exists  
-- POST /customers  
-- PUT /customers/{id}  
-- DELETE /customers/{id}  
-
-### Order Service
-
-- GET /orders  
-- GET /orders/{id}  
-- POST /orders  
-
-### Notification Service
-
-- GET /notifications  
-
----
-
-## End-to-End Test (Required Flow)
-
-### 1. Create a customer (Customer Service)
-
-POST /customers
-
-```json
-{
-  "firstName": "Divyesh",
-  "lastName": "Hirapara",
-  "email": "divyeshhirapara@test.com"
-}
-```
-
-### 2. Create a product with stock (Product Service)
-
-POST /products
-
-```json
-{
-  "name": "Keyboard",
-  "price": 50,
-  "stock": 10
-}
-```
-
-### 3. Create an order (Order Service)
-
-POST /orders
-
-```json
-{
-  "customerId": "CUSTOMER_ID",
-  "items": [
-    { "productId": "PRODUCT_ID", "quantity": 2 }
-  ]
-}
-```
-
-### 4. Verify stock changed (Product Service)
-
-GET /products/{PRODUCT_ID}
-
-Expected result:
-
-- Stock becomes 8  
-- Eventual consistency applies; allow a short delay  
-
-### 5. Verify notification log (Notification Service)
-
-GET /notifications
-
-Expected result:
-
-- A log entry referencing the created order  
-
----
-
-## Migrations (Local Development)
-
-Install tool:
-
-```bash
-dotnet tool install --global dotnet-ef
-```
-
-Create migrations (independent per service):
-
-```bash
-dotnet ef migrations add InitialCreate -p src/ProductService/ProductService.Api/ProductService.Api.csproj -o Migrations
-dotnet ef migrations add InitialCreate -p src/CustomerService/CustomerService.Api/CustomerService.Api.csproj -o Migrations
-dotnet ef migrations add InitialCreate -p src/OrderService/OrderService.Api/OrderService.Api.csproj -o Migrations
-dotnet ef migrations add InitialCreate -p src/NotificationService/NotificationService.Api/NotificationService.Api.csproj -o Migrations
-```
-
-Databases are migrated automatically on startup inside each service using:
-
-```
-Database.MigrateAsync()
-```
-
----
-
-## Troubleshooting
-
 Check status:
 
 ```bash
 docker compose ps
 ```
 
+## URLs (Main Mode)
+
+- Blazor Frontend: http://localhost:8080  
+- API Gateway Swagger (gateway endpoints only): http://localhost:5000/swagger  
+- RabbitMQ UI: http://localhost:15672 (guest/guest)  
+
+## Optional: Viva/Testing Mode (Expose Service Swagger UIs)
+
+If you need to open each microservice Swagger UI directly on different ports, run with the additional compose file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.swagger.yml up -d --build
+```
+
+### Service Swagger URLs (viva/testing mode)
+
+- Product Service: http://localhost:5001/swagger  
+- Customer Service: http://localhost:5002/swagger  
+- Order Service: http://localhost:5003/swagger  
+- Notification Service: http://localhost:5004/swagger  
+- API Gateway: http://localhost:5000/swagger  
+- Frontend: http://localhost:8080  
+
+To return to main mode (hide internal services):
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+## Frontend Pages and Features
+
+### Minimum required features implemented:
+
+#### Products
+- View all products  
+- Add product  
+
+#### Customers
+- View customers  
+- Add customer  
+
+#### Orders
+- Create order  
+- View orders  
+
+### Additional helpful features:
+
+- Notifications page to view event logs  
+- Cancel order action (publishes OrderCancelled and restores stock asynchronously)  
+
+### Navigation:
+
+- Home (Dashboard)  
+- Products  
+- Customers  
+- Orders  
+- Notifications  
+
+## API Gateway Routing
+
+The frontend communicates only with the API Gateway using the `/api` prefix:
+
+- `/api/products` → Product Service `/products`  
+- `/api/customers` → Customer Service `/customers`  
+- `/api/orders` → Order Service `/orders`  
+- `/api/notifications` → Notification Service `/notifications`  
+
+### Aggregated endpoint (gateway-owned):
+
+```http
+GET /api/orders/{id}/details
+```
+
+## Messaging (RabbitMQ)
+
+- Exchange: `orders.exchange` (direct)  
+
+### Routing keys:
+- `order.created`  
+- `order.cancelled`  
+
+Product Service consumes events to update stock.  
+Notification Service consumes events to store logs.  
+
+## End-to-End Workflow (UI Demo)
+
+1. Open the UI: http://localhost:8080  
+2. Add a customer (Customers page)  
+3. Add a product with stock (Products page)  
+4. Create an order (Orders page)  
+5. Refresh Products page after a short delay and confirm stock decreased  
+6. Open Notifications page and confirm a log entry exists  
+7. Cancel the order (Orders page)  
+8. Refresh Products page after a short delay and confirm stock restored  
+9. Confirm cancellation log appears in Notifications  
+
+## Database Verification (Optional)
+
+You can inspect service databases from containers using `psql`.
+
+Example:
+
+```bash
+docker exec -it ordermanagement-product-db-1 psql -U postgres -d productdb
+```
+
+Inside `psql`:
+
+```sql
+\dt
+SELECT * FROM "Products";
+SELECT * FROM "ProcessedEvents";
+\q
+```
+
+Repeat similarly for:
+
+- `customerdb` → "Customers"  
+- `orderdb` → "Orders", "OrderItems"  
+- `notificationdb` → "Notifications"  
+
+## Troubleshooting
+
+### Ports not reachable (Swagger URLs)
+
+In main mode, internal services are not exposed. Use the viva/testing mode compose file to publish ports.
+
+### Service not starting
+
 Check logs:
 
 ```bash
+docker compose logs --tail 200 api-gateway
+docker compose logs --tail 200 blazor-frontend
 docker compose logs --tail 200 product-service
 docker compose logs --tail 200 customer-service
 docker compose logs --tail 200 order-service
 docker compose logs --tail 200 notification-service
 ```
 
-Clean rebuild:
+### Clean rebuild
 
 ```bash
 docker compose down
 docker compose build --no-cache
 docker compose up --build
 ```
-
----
-
-
