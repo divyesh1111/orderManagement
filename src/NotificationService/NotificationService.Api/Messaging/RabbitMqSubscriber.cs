@@ -14,18 +14,44 @@ public sealed class RabbitMqSubscriber(
     IOptions<RabbitMqOptions> optionsAccessor) : BackgroundService
 {
     readonly RabbitMqOptions options = optionsAccessor.Value;
+
     IConnection? connection;
     IModel? channel;
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                StartConsumer();
+                await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch
+            {
+                Cleanup();
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            }
+        }
+    }
+
+    void StartConsumer()
+    {
+        Cleanup();
+
         var factory = new ConnectionFactory
         {
             HostName = options.Host,
             Port = options.Port,
             UserName = options.User,
             Password = options.Pass,
-            DispatchConsumersAsync = true
+            DispatchConsumersAsync = true,
+            AutomaticRecoveryEnabled = true,
+            NetworkRecoveryInterval = TimeSpan.FromSeconds(5)
         };
 
         connection = factory.CreateConnection();
@@ -41,8 +67,6 @@ public sealed class RabbitMqSubscriber(
         consumer.Received += OnMessage;
 
         channel.BasicConsume(queue: options.QueueName, autoAck: false, consumer: consumer);
-
-        return Task.CompletedTask;
     }
 
     async Task OnMessage(object sender, BasicDeliverEventArgs ea)
@@ -55,6 +79,7 @@ public sealed class RabbitMqSubscriber(
             var json = Encoding.UTF8.GetString(ea.Body.ToArray());
 
             Guid orderId;
+
             if (routingKey == options.OrderCreatedRoutingKey)
             {
                 var evt = JsonSerializer.Deserialize<OrderCreatedEvent>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -97,14 +122,29 @@ public sealed class RabbitMqSubscriber(
         }
         catch
         {
-            channel.BasicNack(ea.DeliveryTag, false, true);
+            try
+            {
+                channel.BasicNack(ea.DeliveryTag, false, true);
+            }
+            catch
+            {
+            }
         }
+    }
+
+    void Cleanup()
+    {
+        try { channel?.Close(); } catch { }
+        try { connection?.Close(); } catch { }
+        channel?.Dispose();
+        connection?.Dispose();
+        channel = null;
+        connection = null;
     }
 
     public override void Dispose()
     {
-        channel?.Close();
-        connection?.Close();
+        Cleanup();
         base.Dispose();
     }
 }
