@@ -11,6 +11,7 @@ builder.Services.AddHttpClient<ProductsApi>(c => c.BaseAddress = new Uri(apiBase
 builder.Services.AddHttpClient<CustomersApi>(c => c.BaseAddress = new Uri(apiBaseUrl));
 builder.Services.AddHttpClient<OrdersApi>(c => c.BaseAddress = new Uri(apiBaseUrl));
 builder.Services.AddHttpClient<NotificationsApi>(c => c.BaseAddress = new Uri(apiBaseUrl));
+builder.Services.AddHttpClient<OrderDetailsApi>(c => c.BaseAddress = new Uri(apiBaseUrl));
 
 var app = builder.Build();
 

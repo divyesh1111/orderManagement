@@ -1,4 +1,6 @@
-﻿<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+﻿@inject NotificationsApi NotificationsApi
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
   <div class="container-fluid">
     <a class="navbar-brand" href="/">E-Commerce</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
@@ -19,9 +21,40 @@
           <NavLink class="nav-link" href="/orders">Orders</NavLink>
         </li>
         <li class="nav-item">
-          <NavLink class="nav-link" href="/notifications">Notifications</NavLink>
+          <NavLink class="nav-link d-flex align-items-center gap-2" href="/notifications">
+            <span>Notifications</span>
+            @if (notificationCount > 0)
+            {
+              <span class="badge bg-warning text-dark">@notificationCount</span>
+            }
+          </NavLink>
         </li>
       </ul>
+      <button class="btn btn-sm btn-outline-light" @onclick="RefreshCountAsync" disabled="@busy">Refresh</button>
     </div>
   </div>
 </nav>
+
+@code {
+  int notificationCount;
+  bool busy;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshCountAsync();
+  }
+
+  async Task RefreshCountAsync()
+  {
+    busy = true;
+    try
+    {
+      var items = await NotificationsApi.GetAllAsync(CancellationToken.None);
+      notificationCount = items.Count;
+    }
+    finally
+    {
+      busy = false;
+    }
+  }
+}

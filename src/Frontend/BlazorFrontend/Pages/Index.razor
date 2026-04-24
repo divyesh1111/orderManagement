@@ -6,16 +6,24 @@
 
 <div class="row g-3 align-items-stretch">
   <div class="col-lg-8">
-    <div class="card h-100">
+    <div class="card h-100 shadow-sm">
       <div class="card-body">
-        <h3 class="card-title mb-2">Dashboard</h3>
-        <p class="text-muted mb-4">
-          This frontend communicates only with the API Gateway.
-        </p>
+        <div class="d-flex justify-content-between align-items-start gap-3">
+          <div>
+            <h3 class="card-title mb-1">Dashboard</h3>
+            <div class="text-muted">Frontend communicates only with the API Gateway</div>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAsync" disabled="@busy">Refresh</button>
+        </div>
 
-        <div class="row g-3">
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+          <div class="alert alert-danger mt-3 mb-0">@error</div>
+        }
+
+        <div class="row g-3 mt-1">
           <div class="col-md-4">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 bg-light h-100">
               <div class="card-body">
                 <div class="fw-semibold">Products</div>
                 <div class="display-6">@productCount</div>
@@ -25,7 +33,7 @@
           </div>
 
           <div class="col-md-4">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 bg-light h-100">
               <div class="card-body">
                 <div class="fw-semibold">Customers</div>
                 <div class="display-6">@customerCount</div>
@@ -35,7 +43,7 @@
           </div>
 
           <div class="col-md-4">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 bg-light h-100">
               <div class="card-body">
                 <div class="fw-semibold">Orders</div>
                 <div class="display-6">@orderCount</div>
@@ -45,60 +53,112 @@
           </div>
         </div>
 
-        @if (!string.IsNullOrWhiteSpace(error))
-        {
-          <div class="alert alert-danger mt-4 mb-0">@error</div>
-        }
+        <div class="row g-3 mt-1">
+          <div class="col-md-6">
+            <div class="card border-0 h-100">
+              <div class="card-body">
+                <div class="fw-semibold mb-2">Low Stock</div>
+                @if (lowStock.Count == 0)
+                {
+                  <div class="text-muted">No low stock items</div>
+                }
+                else
+                {
+                  <div class="list-group">
+                    @foreach (var p in lowStock)
+                    {
+                      <div class="list-group-item d-flex justify-content-between">
+                        <span>@p.Name</span>
+                        <span class="badge bg-danger">Stock @p.Stock</span>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card border-0 h-100">
+              <div class="card-body">
+                <div class="fw-semibold mb-2">Recent Notifications</div>
+                @if (recentNotifications.Count == 0)
+                {
+                  <div class="text-muted">No notifications yet</div>
+                }
+                else
+                {
+                  <div class="list-group">
+                    @foreach (var n in recentNotifications)
+                    {
+                      <div class="list-group-item">
+                        <div class="d-flex justify-content-between">
+                          <div class="fw-semibold">@n.Message</div>
+                          <div class="text-muted" style="font-size:12px">@n.CreatedAtUtc.ToLocalTime()</div>
+                        </div>
+                        <div class="text-muted" style="font-size:12px">Order: @n.OrderId</div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
 
   <div class="col-lg-4">
-    <div class="card h-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span class="fw-semibold">Recent Notifications</span>
-        <a class="btn btn-sm btn-outline-secondary" href="/notifications">View all</a>
-      </div>
+    <div class="card h-100 shadow-sm">
       <div class="card-body">
-        <div class="d-flex justify-content-between mb-3">
-          <div class="text-muted">Total</div>
+        <div class="fw-semibold">Quick Actions</div>
+        <div class="text-muted mb-3">Create data and test end-to-end flow</div>
+        <div class="d-grid gap-2">
+          <a class="btn btn-outline-primary" href="/customers">Add Customer</a>
+          <a class="btn btn-outline-primary" href="/products">Add Product</a>
+          <a class="btn btn-primary" href="/orders">Create Order</a>
+          <a class="btn btn-outline-secondary" href="/notifications">View Notifications</a>
+        </div>
+
+        <hr />
+
+        <div class="d-flex justify-content-between">
+          <div class="text-muted">Notifications</div>
           <div class="fw-semibold">@notificationCount</div>
         </div>
 
-        @if (recentNotifications.Count == 0)
-        {
-          <div class="text-muted">No notifications yet</div>
-        }
-        else
-        {
-          <div class="list-group">
-            @foreach (var n in recentNotifications)
-            {
-              <div class="list-group-item">
-                <div class="d-flex justify-content-between">
-                  <div class="fw-semibold">@n.Message</div>
-                  <div class="text-muted" style="font-size:12px">@n.CreatedAtUtc</div>
-                </div>
-                <div class="text-muted" style="font-size:12px">Order: @n.OrderId</div>
-              </div>
-            }
-          </div>
-        }
+        <div class="d-flex justify-content-between mt-2">
+          <div class="text-muted">Low Stock Threshold</div>
+          <div class="fw-semibold">@lowStockThreshold</div>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
 @code {
+  bool busy;
+  string error = "";
+
   int productCount;
   int customerCount;
   int orderCount;
   int notificationCount;
+
+  int lowStockThreshold = 3;
+  List<ProductReadDto> lowStock = [];
   List<NotificationReadDto> recentNotifications = [];
-  string error = "";
 
   protected override async Task OnInitializedAsync()
   {
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    busy = true;
     error = "";
     try
     {
@@ -121,6 +181,13 @@
       orderCount = orders.Count;
       notificationCount = notifications.Count;
 
+      lowStock = products
+        .Where(x => x.Stock <= lowStockThreshold)
+        .OrderBy(x => x.Stock)
+        .ThenBy(x => x.Name)
+        .Take(8)
+        .ToList();
+
       recentNotifications = notifications
         .OrderByDescending(x => x.CreatedAtUtc)
         .Take(5)
@@ -129,6 +196,10 @@
     catch (Exception ex)
     {
       error = ex.Message;
+    }
+    finally
+    {
+      busy = false;
     }
   }
 }

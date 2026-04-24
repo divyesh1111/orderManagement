@@ -3,9 +3,9 @@
 
 <h3>Products</h3>
 
-<div class="row">
+<div class="row g-3">
   <div class="col-lg-5">
-    <div class="card mb-3">
+    <div class="card shadow-sm">
       <div class="card-header">Add Product</div>
       <div class="card-body">
         <EditForm Model="form" OnValidSubmit="CreateAsync">
@@ -23,41 +23,66 @@
           </div>
           <button class="btn btn-primary" type="submit" disabled="@busy">Add</button>
         </EditForm>
+
         @if (!string.IsNullOrWhiteSpace(error))
         {
-          <div class="alert alert-danger mt-3">@error</div>
+          <div class="alert alert-danger mt-3 mb-0">@error</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+          <div class="alert alert-success mt-3 mb-0">@message</div>
         }
       </div>
     </div>
   </div>
 
   <div class="col-lg-7">
-    <div class="card">
-      <div class="card-header">All Products</div>
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center gap-3">
+        <span>All Products</span>
+        <div class="d-flex gap-2">
+          <InputText class="form-control form-control-sm" placeholder="Search by name" @bind-Value="query" />
+          <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAsync" disabled="@busy">Refresh</button>
+        </div>
+      </div>
       <div class="card-body">
-        <button class="btn btn-outline-secondary btn-sm mb-3" @onclick="LoadAsync" disabled="@busy">Refresh</button>
         <div class="table-responsive">
-          <table class="table table-sm table-striped">
+          <table class="table table-sm table-striped align-middle">
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Price</th>
-                <th>Stock</th>
+                <th class="text-end">Price</th>
+                <th class="text-end">Stock</th>
                 <th>Id</th>
               </tr>
             </thead>
             <tbody>
-              @foreach (var p in items)
+              @foreach (var p in Filtered())
               {
-                <tr>
-                  <td>@p.Name</td>
-                  <td>@p.Price</td>
-                  <td>@p.Stock</td>
+                <tr class="@(p.Stock <= lowStockThreshold ? "table-warning" : "")">
+                  <td class="fw-semibold">@p.Name</td>
+                  <td class="text-end">@p.Price</td>
+                  <td class="text-end">
+                    @if (p.Stock <= lowStockThreshold)
+                    {
+                      <span class="badge bg-danger">Low @p.Stock</span>
+                    }
+                    else
+                    {
+                      <span>@p.Stock</span>
+                    }
+                  </td>
                   <td class="text-muted" style="font-size:12px">@p.Id</td>
                 </tr>
               }
             </tbody>
           </table>
+
+          @if (items.Count == 0)
+          {
+            <div class="text-muted">No products</div>
+          }
         </div>
       </div>
     </div>
@@ -76,13 +101,25 @@
   ProductForm form = new();
   bool busy;
   string error = "";
+  string message = "";
+  string query = "";
+  int lowStockThreshold = 3;
 
   protected override async Task OnInitializedAsync() => await LoadAsync();
+
+  IEnumerable<ProductReadDto> Filtered()
+  {
+    var q = (query ?? "").Trim();
+    return items
+      .Where(x => string.IsNullOrWhiteSpace(q) || x.Name.Contains(q, StringComparison.OrdinalIgnoreCase))
+      .OrderBy(x => x.Name);
+  }
 
   async Task LoadAsync()
   {
     busy = true;
     error = "";
+    message = "";
     try
     {
       items = await Api.GetAllAsync(CancellationToken.None);
@@ -101,10 +138,17 @@
   {
     busy = true;
     error = "";
+    message = "";
     try
     {
       var created = await Api.CreateAsync(new ProductCreateDto(form.Name, form.Price, form.Stock), CancellationToken.None);
-      if (created is null) error = "Create failed";
+      if (created is null)
+      {
+        error = "Create failed";
+        return;
+      }
+
+      message = "Product added";
       form = new ProductForm();
       await LoadAsync();
     }

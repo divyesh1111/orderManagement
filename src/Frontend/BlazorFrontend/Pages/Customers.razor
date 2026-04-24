@@ -3,9 +3,9 @@
 
 <h3>Customers</h3>
 
-<div class="row">
+<div class="row g-3">
   <div class="col-lg-5">
-    <div class="card mb-3">
+    <div class="card shadow-sm">
       <div class="card-header">Add Customer</div>
       <div class="card-body">
         <EditForm Model="form" OnValidSubmit="CreateAsync">
@@ -23,21 +23,32 @@
           </div>
           <button class="btn btn-primary" type="submit" disabled="@busy">Add</button>
         </EditForm>
+
         @if (!string.IsNullOrWhiteSpace(error))
         {
-          <div class="alert alert-danger mt-3">@error</div>
+          <div class="alert alert-danger mt-3 mb-0">@error</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+          <div class="alert alert-success mt-3 mb-0">@message</div>
         }
       </div>
     </div>
   </div>
 
   <div class="col-lg-7">
-    <div class="card">
-      <div class="card-header">All Customers</div>
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center gap-3">
+        <span>All Customers</span>
+        <div class="d-flex gap-2">
+          <InputText class="form-control form-control-sm" placeholder="Search name or email" @bind-Value="query" />
+          <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAsync" disabled="@busy">Refresh</button>
+        </div>
+      </div>
       <div class="card-body">
-        <button class="btn btn-outline-secondary btn-sm mb-3" @onclick="LoadAsync" disabled="@busy">Refresh</button>
         <div class="table-responsive">
-          <table class="table table-sm table-striped">
+          <table class="table table-sm table-striped align-middle">
             <thead>
               <tr>
                 <th>Name</th>
@@ -46,16 +57,21 @@
               </tr>
             </thead>
             <tbody>
-              @foreach (var c in items)
+              @foreach (var c in Filtered())
               {
                 <tr>
-                  <td>@c.FirstName @c.LastName</td>
+                  <td class="fw-semibold">@c.FirstName @c.LastName</td>
                   <td>@c.Email</td>
                   <td class="text-muted" style="font-size:12px">@c.Id</td>
                 </tr>
               }
             </tbody>
           </table>
+
+          @if (items.Count == 0)
+          {
+            <div class="text-muted">No customers</div>
+          }
         </div>
       </div>
     </div>
@@ -74,13 +90,28 @@
   CustomerForm form = new();
   bool busy;
   string error = "";
+  string message = "";
+  string query = "";
 
   protected override async Task OnInitializedAsync() => await LoadAsync();
+
+  IEnumerable<CustomerReadDto> Filtered()
+  {
+    var q = (query ?? "").Trim();
+    return items
+      .Where(x =>
+        string.IsNullOrWhiteSpace(q) ||
+        (x.FirstName + " " + x.LastName).Contains(q, StringComparison.OrdinalIgnoreCase) ||
+        x.Email.Contains(q, StringComparison.OrdinalIgnoreCase))
+      .OrderBy(x => x.FirstName)
+      .ThenBy(x => x.LastName);
+  }
 
   async Task LoadAsync()
   {
     busy = true;
     error = "";
+    message = "";
     try
     {
       items = await Api.GetAllAsync(CancellationToken.None);
@@ -99,10 +130,17 @@
   {
     busy = true;
     error = "";
+    message = "";
     try
     {
       var created = await Api.CreateAsync(new CustomerCreateDto(form.FirstName, form.LastName, form.Email), CancellationToken.None);
-      if (created is null) error = "Create failed";
+      if (created is null)
+      {
+        error = "Create failed";
+        return;
+      }
+
+      message = "Customer added";
       form = new CustomerForm();
       await LoadAsync();
     }

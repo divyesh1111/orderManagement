@@ -2,12 +2,13 @@
 @inject OrdersApi OrdersApi
 @inject CustomersApi CustomersApi
 @inject ProductsApi ProductsApi
+@inject OrderDetailsApi DetailsApi
 
 <h3>Orders</h3>
 
-<div class="row">
+<div class="row g-3">
   <div class="col-lg-5">
-    <div class="card mb-3">
+    <div class="card shadow-sm">
       <div class="card-header">Create Order</div>
       <div class="card-body">
         <EditForm Model="form" OnValidSubmit="CreateAsync">
@@ -43,53 +44,69 @@
 
         @if (!string.IsNullOrWhiteSpace(error))
         {
-          <div class="alert alert-danger mt-3">@error</div>
+          <div class="alert alert-danger mt-3 mb-0">@error</div>
         }
 
         @if (!string.IsNullOrWhiteSpace(message))
         {
-          <div class="alert alert-success mt-3">@message</div>
+          <div class="alert alert-success mt-3 mb-0">@message</div>
         }
+      </div>
+    </div>
+
+    <div class="card shadow-sm mt-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Tips</span>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAllAsync" disabled="@busy">Refresh</button>
+      </div>
+      <div class="card-body text-muted">
+        After creating or cancelling an order, stock updates asynchronously. Refresh Products after a short delay.
       </div>
     </div>
   </div>
 
   <div class="col-lg-7">
-    <div class="card">
+    <div class="card shadow-sm">
       <div class="card-header d-flex justify-content-between align-items-center">
         <span>All Orders</span>
-        <button class="btn btn-outline-secondary btn-sm" @onclick="LoadAllAsync" disabled="@busy">Refresh</button>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAllAsync" disabled="@busy">Refresh</button>
       </div>
       <div class="card-body">
         <div class="table-responsive">
           <table class="table table-sm table-striped align-middle">
             <thead>
               <tr>
-                <th>Order Id</th>
+                <th>Order</th>
                 <th>Status</th>
+                <th>Customer</th>
+                <th class="text-end">Total</th>
                 <th>Created</th>
-                <th>Customer Id</th>
-                <th>Items</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              @foreach (var o in orders)
+              @foreach (var o in orders.OrderByDescending(x => x.CreatedAtUtc))
               {
                 <tr>
                   <td class="text-muted" style="font-size:12px">@o.Id</td>
-                  <td>@o.Status</td>
-                  <td>@o.CreatedAtUtc</td>
-                  <td class="text-muted" style="font-size:12px">@o.CustomerId</td>
-                  <td>@o.Items.Count</td>
-                  <td class="text-end">
-                    @if (!IsCancelled(o))
+                  <td>
+                    @if (IsCancelled(o))
                     {
-                      <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelAsync(o.Id)" disabled="@busy">Cancel</button>
+                      <span class="badge bg-secondary">Cancelled</span>
                     }
                     else
                     {
-                      <span class="text-muted" style="font-size:12px">Cancelled</span>
+                      <span class="badge bg-success">@o.Status</span>
+                    }
+                  </td>
+                  <td>@CustomerName(o.CustomerId)</td>
+                  <td class="text-end">@OrderTotal(o)</td>
+                  <td>@o.CreatedAtUtc.ToLocalTime()</td>
+                  <td class="text-end">
+                    <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => OpenDetailsAsync(o.Id)" disabled="@busy">Details</button>
+                    @if (!IsCancelled(o))
+                    {
+                      <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelAsync(o.Id)" disabled="@busy">Cancel</button>
                     }
                   </td>
                 </tr>
@@ -107,6 +124,86 @@
   </div>
 </div>
 
+@if (detailsOpen)
+{
+  <div class="modal fade show d-block" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <div class="fw-semibold">Order Details</div>
+            <div class="text-muted" style="font-size:12px">@details?.OrderId</div>
+          </div>
+          <button type="button" class="btn-close" @onclick="CloseDetails"></button>
+        </div>
+        <div class="modal-body">
+          @if (details is null)
+          {
+            <div class="text-muted">Loading...</div>
+          }
+          else
+          {
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="card border-0 bg-light">
+                  <div class="card-body">
+                    <div class="fw-semibold">Customer</div>
+                    <div>@details.Customer.FirstName @details.Customer.LastName</div>
+                    <div class="text-muted" style="font-size:12px">@details.Customer.Email</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="card border-0 bg-light">
+                  <div class="card-body">
+                    <div class="fw-semibold">Status</div>
+                    <div>@details.Status</div>
+                    <div class="text-muted" style="font-size:12px">@details.CreatedAtUtc.ToLocalTime()</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-12">
+                <div class="fw-semibold mb-2">Items</div>
+                <div class="table-responsive">
+                  <table class="table table-sm table-striped align-middle">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Unit Snapshot</th>
+                        <th class="text-end">Line Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @foreach (var it in details.Items)
+                      {
+                        <tr>
+                          <td>@it.Product.Name</td>
+                          <td class="text-end">@it.Product.Price</td>
+                          <td class="text-end">@it.Quantity</td>
+                          <td class="text-end">@it.UnitPriceSnapshot</td>
+                          <td class="text-end">@((it.UnitPriceSnapshot * it.Quantity).ToString("0.00"))</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" @onclick="CloseDetails">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show"></div>
+}
+
 @code {
   sealed class OrderForm
   {
@@ -119,13 +216,31 @@
   List<CustomerReadDto> customers = [];
   List<ProductReadDto> products = [];
   List<OrderReadDto> orders = [];
+  Dictionary<Guid, CustomerReadDto> customerMap = new();
+  Dictionary<Guid, ProductReadDto> productMap = new();
+
   bool busy;
   string error = "";
   string message = "";
 
+  bool detailsOpen;
+  OrderDetailsDto? details;
+
   protected override async Task OnInitializedAsync() => await LoadAllAsync();
 
   static bool IsCancelled(OrderReadDto o) => string.Equals(o.Status, "Cancelled", StringComparison.OrdinalIgnoreCase);
+
+  string CustomerName(Guid customerId)
+  {
+    if (customerMap.TryGetValue(customerId, out var c)) return $"{c.FirstName} {c.LastName}";
+    return customerId.ToString();
+  }
+
+  string OrderTotal(OrderReadDto o)
+  {
+    var total = o.Items.Sum(x => x.UnitPriceSnapshot * x.Quantity);
+    return total.ToString("0.00");
+  }
 
   async Task LoadAllAsync()
   {
@@ -135,6 +250,7 @@
     try
     {
       var ct = CancellationToken.None;
+
       var cTask = CustomersApi.GetAllAsync(ct);
       var pTask = ProductsApi.GetAllAsync(ct);
       var oTask = OrdersApi.GetAllAsync(ct);
@@ -144,6 +260,9 @@
       customers = cTask.Result;
       products = pTask.Result;
       orders = oTask.Result;
+
+      customerMap = customers.ToDictionary(x => x.Id, x => x);
+      productMap = products.ToDictionary(x => x.Id, x => x);
     }
     catch (Exception ex)
     {
@@ -182,14 +301,15 @@
 
       var dto = new OrderCreateDto(customerId, new List<OrderItemCreateDto> { new(productId, form.Quantity) });
       var created = await OrdersApi.CreateAsync(dto, CancellationToken.None);
+
       if (created is null)
       {
         error = "Create failed";
         return;
       }
 
-      form = new OrderForm();
       message = "Order created";
+      form = new OrderForm();
       await LoadAllAsync();
     }
     catch (Exception ex)
@@ -227,5 +347,27 @@
     {
       busy = false;
     }
+  }
+
+  async Task OpenDetailsAsync(Guid orderId)
+  {
+    detailsOpen = true;
+    details = null;
+
+    try
+    {
+      var d = await DetailsApi.GetAsync(orderId, CancellationToken.None);
+      details = d;
+    }
+    catch
+    {
+      details = null;
+    }
+  }
+
+  void CloseDetails()
+  {
+    detailsOpen = false;
+    details = null;
   }
 }

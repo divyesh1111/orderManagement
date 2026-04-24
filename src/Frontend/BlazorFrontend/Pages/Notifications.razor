@@ -3,16 +3,25 @@
 
 <h3>Notifications</h3>
 
-<div class="card">
-  <div class="card-header d-flex justify-content-between align-items-center">
+<div class="card shadow-sm">
+  <div class="card-header d-flex justify-content-between align-items-center gap-3">
     <span class="fw-semibold">Logs</span>
-    <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAsync" disabled="@busy">Refresh</button>
+    <div class="d-flex gap-2">
+      <InputText class="form-control form-control-sm" placeholder="Filter by order id or keyword" @bind-Value="filter" />
+      <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAsync" disabled="@busy">Refresh</button>
+    </div>
   </div>
+
   <div class="card-body">
     @if (!string.IsNullOrWhiteSpace(error))
     {
       <div class="alert alert-danger">@error</div>
     }
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="text-muted">Total: @items.Count</div>
+      <div class="text-muted">Showing: @Filtered().Count()</div>
+    </div>
 
     @if (items.Count == 0 && string.IsNullOrWhiteSpace(error))
     {
@@ -21,23 +30,30 @@
     else
     {
       <div class="table-responsive">
-        <table class="table table-sm table-striped">
+        <table class="table table-sm table-striped align-middle">
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Message</th>
-              <th>Order Id</th>
-              <th>Id</th>
+              <th style="min-width:170px;">Time</th>
+              <th style="min-width:140px;">Event</th>
+              <th>Items</th>
+              <th style="min-width:260px;">Order Id</th>
+              <th style="min-width:260px;">Log Id</th>
             </tr>
           </thead>
           <tbody>
-            @foreach (var n in items)
+            @foreach (var n in Filtered())
             {
+              var view = ViewModel(n);
               <tr>
-                <td>@n.CreatedAtUtc</td>
-                <td>@n.Message</td>
-                <td class="text-muted" style="font-size:12px">@n.OrderId</td>
-                <td class="text-muted" style="font-size:12px">@n.Id</td>
+                <td>@view.TimeText</td>
+                <td>
+                  <span class="badge @view.BadgeClass">@view.EventText</span>
+                </td>
+                <td class="text-muted" style="font-size:12px; white-space:normal;">
+                  @view.ItemsText
+                </td>
+                <td class="text-muted" style="font-size:12px;">@n.OrderId</td>
+                <td class="text-muted" style="font-size:12px;">@n.Id</td>
               </tr>
             }
           </tbody>
@@ -51,8 +67,57 @@
   List<NotificationReadDto> items = [];
   bool busy;
   string error = "";
+  string filter = "";
 
   protected override async Task OnInitializedAsync() => await LoadAsync();
+
+  IEnumerable<NotificationReadDto> Filtered()
+  {
+    var f = (filter ?? "").Trim();
+    if (string.IsNullOrWhiteSpace(f)) return items;
+
+    return items.Where(x =>
+      x.OrderId.ToString().Contains(f, StringComparison.OrdinalIgnoreCase) ||
+      x.Message.Contains(f, StringComparison.OrdinalIgnoreCase) ||
+      x.Id.ToString().Contains(f, StringComparison.OrdinalIgnoreCase));
+  }
+
+  sealed record NotificationView(string TimeText, string EventText, string ItemsText, string BadgeClass);
+
+  static NotificationView ViewModel(NotificationReadDto n)
+  {
+    var msg = n.Message ?? "";
+    var time = n.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+
+    if (msg.StartsWith("Order created.", StringComparison.OrdinalIgnoreCase))
+    {
+      var itemsText = ExtractItems(msg);
+      return new NotificationView(time, "Order Created", itemsText, "bg-success");
+    }
+
+    if (msg.StartsWith("Order cancelled.", StringComparison.OrdinalIgnoreCase))
+    {
+      var itemsText = ExtractItems(msg);
+      return new NotificationView(time, "Order Cancelled", itemsText, "bg-secondary");
+    }
+
+    if (msg.StartsWith("order.created:", StringComparison.OrdinalIgnoreCase))
+      return new NotificationView(time, "Order Created", "Not available", "bg-success");
+
+    if (msg.StartsWith("order.cancelled:", StringComparison.OrdinalIgnoreCase))
+      return new NotificationView(time, "Order Cancelled", "Not available", "bg-secondary");
+
+    return new NotificationView(time, "Event", msg, "bg-dark");
+  }
+
+  static string ExtractItems(string msg)
+  {
+    var key = "Items:";
+    var idx = msg.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+    if (idx < 0) return "Not available";
+    var value = msg[(idx + key.Length)..].Trim();
+    return string.IsNullOrWhiteSpace(value) ? "Not available" : value;
+  }
 
   async Task LoadAsync()
   {

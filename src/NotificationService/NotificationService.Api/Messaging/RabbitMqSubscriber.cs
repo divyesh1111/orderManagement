@@ -69,6 +69,12 @@ public sealed class RabbitMqSubscriber(
         channel.BasicConsume(queue: options.QueueName, autoAck: false, consumer: consumer);
     }
 
+    static string ItemsText(IReadOnlyList<OrderCreatedItemDto> items)
+    {
+        if (items.Count == 0) return "None";
+        return string.Join(", ", items.Select(x => $"{x.ProductId} x{x.Quantity}"));
+    }
+
     async Task OnMessage(object sender, BasicDeliverEventArgs ea)
     {
         if (channel is null) return;
@@ -79,6 +85,7 @@ public sealed class RabbitMqSubscriber(
             var json = Encoding.UTF8.GetString(ea.Body.ToArray());
 
             Guid orderId;
+            string message;
 
             if (routingKey == options.OrderCreatedRoutingKey)
             {
@@ -88,7 +95,9 @@ public sealed class RabbitMqSubscriber(
                     channel.BasicAck(ea.DeliveryTag, false);
                     return;
                 }
+
                 orderId = evt.OrderId;
+                message = $"Order created. Items: {ItemsText(evt.Items)}";
             }
             else if (routingKey == options.OrderCancelledRoutingKey)
             {
@@ -98,7 +107,9 @@ public sealed class RabbitMqSubscriber(
                     channel.BasicAck(ea.DeliveryTag, false);
                     return;
                 }
+
                 orderId = evt.OrderId;
+                message = $"Order cancelled. Items: {ItemsText(evt.Items)}";
             }
             else
             {
@@ -113,7 +124,7 @@ public sealed class RabbitMqSubscriber(
             {
                 Id = Guid.NewGuid(),
                 OrderId = orderId,
-                Message = $"{routingKey}:{orderId}",
+                Message = message,
                 CreatedAtUtc = DateTime.UtcNow
             });
 
@@ -124,7 +135,7 @@ public sealed class RabbitMqSubscriber(
         {
             try
             {
-                channel.BasicNack(ea.DeliveryTag, false, true);
+                channel?.BasicNack(ea.DeliveryTag, false, true);
             }
             catch
             {
